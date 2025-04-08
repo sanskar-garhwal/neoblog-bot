@@ -5,11 +5,20 @@ from email.mime.text import MIMEText
 from datetime import datetime
 from random import choice
 
-# Load from environment variables (GitHub Secrets)
+# Load environment variables (from GitHub Secrets)
 sender_email = os.getenv("SENDER_EMAIL")
 receiver_email = os.getenv("RECEIVER_EMAIL")
 app_password = os.getenv("APP_PASSWORD")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+
+print("Loaded secrets:")
+print(f"SENDER: {sender_email}")
+print(f"RECEIVER: {receiver_email}")
+
+# Hugging Face API setup
+model = "mistralai/Mistral-7B-Instruct-v0.1"
+api_url = f"https://api-inference.huggingface.co/models/{model}"
+headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 # Blog topics
 topics = [
@@ -39,27 +48,30 @@ topics = [
     "How to Build a Personal Brand as a Student"
 ]
 
-# Pick a random topic
+# Choose random topic
 topic = choice(topics)
+prompt = f"Write a creative, human-like blog post on the topic: {topic}"
 
-# Generate blog using Hugging Face API
 def generate_blog(prompt):
-    url = "https://api-inference.huggingface.co/models/gpt2"
-    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-    payload = {"inputs": prompt, "max_length": 800}
-    response = requests.post(url, headers=headers, json=payload)
-    result = response.json()
-    return result[0]["generated_text"] if isinstance(result, list) else "Error: " + str(result)
+    print(f"Generating blog on: {topic}")
+    payload = {
+        "inputs": prompt,
+        "parameters": {"max_new_tokens": 500, "temperature": 0.7, "top_p": 0.9}
+    }
+    response = requests.post(api_url, headers=headers, json=payload)
+    if response.status_code == 200:
+        result = response.json()
+        print("Blog generated successfully.")
+        if isinstance(result, list):
+            return result[0]["generated_text"]
+        elif "generated_text" in result:
+            return result["generated_text"]
+    print(f"Failed to generate blog: {response.status_code}, {response.text}")
+    return f"ERROR: {response.status_code} - {response.text}"
 
-blog_text = generate_blog(f"Write a detailed, human-like blog on: {topic}")
-
-# Save blog to a file
-filename = f"blog_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-with open(filename, "w") as f:
-    f.write(blog_text)
-
-# Send blog via email
+# Send email
 def send_email(subject, body):
+    print("Preparing to send email...")
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = sender_email
@@ -72,6 +84,16 @@ def send_email(subject, body):
         server.quit()
         print("Email sent successfully.")
     except Exception as e:
-        print("Failed to send email:", e)
+        print(f"Failed to send email: {e}")
 
+# Run
+blog_text = generate_blog(prompt)
+
+# Save the blog
+filename = f"blog_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+with open(filename, "w") as f:
+    f.write(blog_text)
+print(f"Saved blog to {filename}")
+
+# Email the blog
 send_email(f"NeoBlog: {topic}", blog_text)
