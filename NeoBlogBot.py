@@ -2,52 +2,28 @@ import os
 import requests
 import smtplib
 from email.mime.text import MIMEText
-from datetime import datetime
 from random import choice
 
-# Secrets from GitHub
-API_TOKEN = os.environ.get("HF_API_TOKEN")
+# Load environment variables from GitHub Secrets
+HF_API_TOKEN = os.getenv('HF_API_TOKEN')
+SENDER_EMAIL = os.getenv('SENDER_EMAIL')
+RECEIVER_EMAIL = os.getenv('RECEIVER_EMAIL')
+APP_PASSWORD = os.getenv('APP_PASSWORD')
+
+# Hugging Face API configuration
 MODEL = "mistralai/Mistral-7B-Instruct-v0.1"
 API_URL = f"https://api-inference.huggingface.co/models/{MODEL}"
-headers = {"Authorization": f"Bearer {API_TOKEN}"}
-
-# Gmail from secrets
-sender_email = os.environ.get("SENDER_EMAIL")
-receiver_email = os.environ.get("RECEIVER_EMAIL")
-app_password = os.environ.get("APP_PASSWORD")
+headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 # Blog topics
 topics = [
     "JEE and Competitive Exams: What You Need to Know",
     "JEE Preparation as an Indian Student: Tips and Real Talk",
-    "How to Earn Online as a Teen/Student in 2025",
-    "All You Need to Know About AI in Daily Life",
-    "How to Become an Influencer from Scratch",
-    "Pressure on Indian Students: A Deep Dive",
-    "Real Darknet Experiences: What You Should Know",
-    "Life in India: The Beautiful Chaos",
-    "What Is Quality Education and Why Does It Matter?",
-    "Why Being a Student in India Is Tough But Worth It",
-    "Mental Health and Burnout in Indian Education",
-    "Passive Income Ideas for Students",
-    "How Social Media Affects Student Life",
-    "Top Free Tools Every Student Should Use in 2025",
-    "From IIT Dreams to Reality: A JEE Topper’s Story",
-    "Is AI Taking Over Jobs? What Students Should Know",
-    "Smartphone Addiction and How to Beat It",
-    "Freelancing as a Student: Where to Start",
-    "School vs. Real Life: Skills They Don’t Teach",
-    "What the Education System Can Learn from Finland",
-    "How to Stay Motivated During Exam Season",
-    "The Truth About Coaching Institutes in India",
-    "College Life vs. School Life in India",
-    "How to Build a Personal Brand as a Student"
+    # ... rest of your topics ...
 ]
 
-topic = choice(topics)
-prompt = f"Write a creative, SEO-friendly and human-like blog post on the topic: {topic}"
-
 def generate_blog(prompt):
+    """Generate blog content using Hugging Face API"""
     payload = {
         "inputs": prompt,
         "parameters": {
@@ -56,34 +32,56 @@ def generate_blog(prompt):
             "top_p": 0.9
         }
     }
-    response = requests.post(API_URL, headers=headers, json=payload)
-    if response.status_code == 200:
-        result = response.json()
-        if isinstance(result, list):
-            return result[0]["generated_text"]
-        elif "generated_text" in result:
-            return result["generated_text"]
-    return f"Error {response.status_code}: {response.text}"
-
-def send_email(subject, body):
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = sender_email
-    msg["To"] = receiver_email
 
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(sender_email, app_password)
-        server.sendmail(sender_email, receiver_email, msg.as_string())
-        server.quit()
-        print("Blog sent successfully via email.")
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        return result[0]["generated_text"] if isinstance(result, list) else result.get("generated_text", "No text generated.")
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        return f"Error generating blog: {str(e)}"
 
-# Run everything
-print("Generating blog...")
-blog = generate_blog(prompt)
-print("Blog generated. Sending now...\n")
-print(blog)
-send_email(f"New Blog: {topic}", blog)
+def send_email(subject, body):
+    """Send email with generated blog content"""
+    if not all([SENDER_EMAIL, RECEIVER_EMAIL, APP_PASSWORD]):
+        print("Email configuration incomplete")
+        return False
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = RECEIVER_EMAIL
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(SENDER_EMAIL, APP_PASSWORD)
+            server.send_message(msg)
+        print("Email sent successfully")
+        return True
+    except Exception as e:
+        print(f"Email sending failed: {str(e)}")
+        return False
+
+def main():
+    """Main execution flow"""
+    # Validate all required environment variables
+    if not all([HF_API_TOKEN, SENDER_EMAIL, RECEIVER_EMAIL, APP_PASSWORD]):
+        print("Error: Missing required environment variables")
+        return
+
+    # Generate blog content
+    topic = choice(topics)
+    prompt = f"Write a creative, SEO-friendly blog post on: {topic}"
+    print(f"Generating blog about: {topic}")
+    
+    blog_content = generate_blog(prompt)
+    
+    if not blog_content.startswith("Error"):
+        print("Blog generated successfully")
+        send_email(f"New Blog: {topic}", blog_content)
+    else:
+        print(blog_content)
+
+if __name__ == "__main__":
+    main()
