@@ -1,19 +1,19 @@
+import os
 import requests
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
 from random import choice
 
-# Hugging Face API details
-API_TOKEN = "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"
+# Environment variables for secrets
+API_TOKEN = os.getenv("HF_API_TOKEN")
+SENDER_EMAIL = os.getenv("GMAIL_SENDER")
+RECEIVER_EMAIL = os.getenv("GMAIL_RECEIVER")
+APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+
 MODEL = "mistralai/Mistral-7B-Instruct-v0.1"
 API_URL = f"https://api-inference.huggingface.co/models/{MODEL}"
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
-
-# Gmail setup
-sender_email = "ihf0500598@gmail.com"
-receiver_email = "satyajitwhomick@gmail.com"
-app_password = "pqadllghxwrdysuc"  # No spaces!
 
 # Blog topics
 topics = [
@@ -75,14 +75,14 @@ def generate_blog(prompt):
 def send_email(subject, body):
     msg = MIMEText(body)
     msg["Subject"] = subject
-    msg["From"] = sender_email
-    msg["To"] = receiver_email
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = RECEIVER_EMAIL
 
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
-        server.login(sender_email, app_password)
-        server.sendmail(sender_email, receiver_email, msg.as_string())
+        server.login(SENDER_EMAIL, APP_PASSWORD)
+        server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
         server.quit()
         print("Blog sent successfully via email.")
     except Exception as e:
