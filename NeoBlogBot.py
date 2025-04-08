@@ -5,20 +5,16 @@ from email.mime.text import MIMEText
 from datetime import datetime
 from random import choice
 
-# Load environment variables (from GitHub Secrets)
-sender_email = os.getenv("SENDER_EMAIL")
-receiver_email = os.getenv("RECEIVER_EMAIL")
-app_password = os.getenv("APP_PASSWORD")
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+# Secrets from GitHub
+API_TOKEN = os.environ.get("HF_API_TOKEN")
+MODEL = "mistralai/Mistral-7B-Instruct-v0.1"
+API_URL = f"https://api-inference.huggingface.co/models/{MODEL}"
+headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-print("Loaded secrets:")
-print(f"SENDER: {sender_email}")
-print(f"RECEIVER: {receiver_email}")
-
-# Hugging Face API setup
-model = "mistralai/Mistral-7B-Instruct-v0.1"
-api_url = f"https://api-inference.huggingface.co/models/{model}"
-headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+# Gmail from secrets
+sender_email = os.environ.get("SENDER_EMAIL")
+receiver_email = os.environ.get("RECEIVER_EMAIL")
+app_password = os.environ.get("APP_PASSWORD")
 
 # Blog topics
 topics = [
@@ -48,52 +44,46 @@ topics = [
     "How to Build a Personal Brand as a Student"
 ]
 
-# Choose random topic
 topic = choice(topics)
-prompt = f"Write a creative, human-like blog post on the topic: {topic}"
+prompt = f"Write a creative, SEO-friendly and human-like blog post on the topic: {topic}"
 
 def generate_blog(prompt):
-    print(f"Generating blog on: {topic}")
     payload = {
         "inputs": prompt,
-        "parameters": {"max_new_tokens": 500, "temperature": 0.7, "top_p": 0.9}
+        "parameters": {
+            "max_new_tokens": 500,
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
     }
-    response = requests.post(api_url, headers=headers, json=payload)
+    response = requests.post(API_URL, headers=headers, json=payload)
     if response.status_code == 200:
         result = response.json()
-        print("Blog generated successfully.")
         if isinstance(result, list):
             return result[0]["generated_text"]
         elif "generated_text" in result:
             return result["generated_text"]
-    print(f"Failed to generate blog: {response.status_code}, {response.text}")
-    return f"ERROR: {response.status_code} - {response.text}"
+    return f"Error {response.status_code}: {response.text}"
 
-# Send email
 def send_email(subject, body):
-    print("Preparing to send email...")
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = sender_email
     msg["To"] = receiver_email
 
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
         server.login(sender_email, app_password)
         server.sendmail(sender_email, receiver_email, msg.as_string())
         server.quit()
-        print("Email sent successfully.")
+        print("Blog sent successfully via email.")
     except Exception as e:
         print(f"Failed to send email: {e}")
 
-# Run
-blog_text = generate_blog(prompt)
-
-# Save the blog
-filename = f"blog_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-with open(filename, "w") as f:
-    f.write(blog_text)
-print(f"Saved blog to {filename}")
-
-# Email the blog
-send_email(f"NeoBlog: {topic}", blog_text)
+# Run everything
+print("Generating blog...")
+blog = generate_blog(prompt)
+print("Blog generated. Sending now...\n")
+print(blog)
+send_email(f"New Blog: {topic}", blog)
